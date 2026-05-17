@@ -1,0 +1,18 @@
+{
+    "pluginmetadataversion": 2,
+    "name": "Theme Ninja",
+    "type": [
+        "ui"
+    ],
+    "api": [
+        "python3"
+    ],
+    "version": "0.1.0",
+    "author": "Codex",
+    "minimumBinaryNinjaVersion": 4000,
+    "description": "Create, edit, preview, and apply Binary Ninja themes.",
+    "longdescription": "Theme Ninja adds an in-app Binary Ninja theme editor with file theme discovery, refresh/apply controls, color editing, live preview rendering, safe duplication, and no-restart save/apply flows.",
+    "license": {
+        "name": "MIT"
+    }
+}
