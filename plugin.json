@@ -11,7 +11,7 @@
     "author": "Codex",
     "minimumBinaryNinjaVersion": 4000,
     "description": "Create, edit, preview, and apply Binary Ninja themes.",
-    "longdescription": "Theme Ninja adds an in-app Binary Ninja theme editor with file theme discovery, refresh/apply controls, color editing, live preview rendering, safe duplication, and no-restart save/apply flows.",
+    "longdescription": "Theme Ninja adds a cross-platform Binary Ninja theme editor with file theme discovery, color editing, live preview rendering, safe duplication, and no-restart save/apply flows.",
     "license": {
         "name": "MIT"
     }

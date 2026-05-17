@@ -1,6 +1,6 @@
 # Theme Ninja
 
-Theme Ninja is a Binary Ninja UI plugin for creating, editing, previewing, refreshing, and activating `.bntheme` files without restarting Binary Ninja.
+Theme Ninja is a Binary Ninja UI plugin for creating, editing, previewing, and activating `.bntheme` files without restarting Binary Ninja.
 
 ## Features
 
@@ -10,32 +10,33 @@ Theme Ninja is a Binary Ninja UI plugin for creating, editing, previewing, refre
 - Creates new themes from a complete starter template.
 - Duplicates existing themes into the writable `themes` folder.
 - Edits `colors`, `palette`, `disabledPalette`, and `theme-colors` entries.
-- Provides a live in-plugin preview for disassembly, graph, hex, sidebar, tab, and console colors.
+- Provides a live in-plugin preview for disassembly, sidebar, tab, status, and console colors.
 - Writes a one-time `.bak` backup before modifying an existing theme.
-- Supports a temporary "Preview in BN" theme so unsaved edits can be tested in the actual UI.
 
 ## Install
 
-Place this folder in Binary Ninja's user plugin directory:
-
-```text
-~/Library/Application Support/Binary Ninja/plugins/ThemeNinja
-```
-
-On macOS, the user plugin directory is available from Binary Ninja through:
+Place this folder in Binary Ninja's user plugin directory as `ThemeNinja`. The most reliable way to find that directory on any platform is from Binary Ninja's Python console:
 
 ```python
 import binaryninja
 binaryninja.user_plugin_path()
 ```
 
+Common defaults are:
+
+```text
+macOS:   ~/Library/Application Support/Binary Ninja/plugins/ThemeNinja
+Linux:   ~/.binaryninja/plugins/ThemeNinja
+Windows: %APPDATA%\Binary Ninja\plugins\ThemeNinja
+```
+
 Restart Binary Ninja after installing the plugin itself. Theme edits made through the plugin do not require restarts.
 
 ## Use
 
-Open `Plugins -> Theme Ninja`, or open the `Theme Ninja` sidebar item. The pane layout is the most comfortable way to work when editing many colors.
+Open `Plugins -> Theme Ninja`. The sidebar button is off by default; enable `themeNinja.showSidebarWidget` in Binary Ninja settings if you want it available in the sidebar after restart.
 
-Use `Preview in BN` for a temporary runtime preview. Use `Save && Apply` when the theme is ready to become the active Binary Ninja theme.
+Use `Save` to persist edits. Use `Apply Theme` to make the selected theme active; after an edit, that same button becomes `Save & Apply`.
 
 ## Notes
 
