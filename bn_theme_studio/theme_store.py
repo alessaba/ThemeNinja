@@ -12,6 +12,14 @@ from typing import Any
 THEME_FOLDER_NAMES = ("themes", "community-themes", "community_themes")
 PREVIEW_FILE_NAME = ".theme-ninja-preview.bntheme"
 PREVIEW_THEME_NAME = "Theme Ninja Preview"
+WINDOWS_RESERVED_FILE_STEMS = {
+	"CON",
+	"PRN",
+	"AUX",
+	"NUL",
+	*(f"COM{index}" for index in range(1, 10)),
+	*(f"LPT{index}" for index in range(1, 10)),
+}
 
 
 @dataclass(frozen=True)
@@ -76,7 +84,11 @@ def discover_themes(user_dir: str | Path) -> list[ThemeRecord]:
 def safe_file_stem(name: str) -> str:
 	stem = re.sub(r"[^A-Za-z0-9._-]+", "-", name.strip().lower())
 	stem = re.sub(r"-{2,}", "-", stem).strip(".-")
-	return stem or "theme"
+	if not stem:
+		return "theme"
+	if stem.upper() in WINDOWS_RESERVED_FILE_STEMS:
+		return f"theme-{stem}"
+	return stem
 
 
 def unique_theme_path(directory: Path, name: str) -> Path:
