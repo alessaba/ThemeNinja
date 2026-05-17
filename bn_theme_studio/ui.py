@@ -4,7 +4,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from binaryninja import log_error, log_info, log_warn, user_directory
+from binaryninja import Settings, log_error, log_info, log_warn, user_directory
 from binaryninja.enums import ThemeColor
 from binaryninjaui import (
 	Menu,
@@ -115,6 +115,26 @@ def _refresh_runtime_themes() -> None:
 		refreshUserThemes()
 	except Exception as exc:
 		log_warn(f"Theme Ninja could not refresh Binary Ninja themes: {exc}")
+
+
+SIDEBAR_WIDGET_SETTING = "themeNinja.showSidebarWidget"
+
+
+def _register_settings() -> None:
+	settings = Settings()
+	settings.register_group("themeNinja", "Theme Ninja")
+	settings.register_setting(
+		SIDEBAR_WIDGET_SETTING,
+		'{"title": "Show Sidebar Button", "description": "Add Theme Ninja to the Binary Ninja sidebar. Restart Binary Ninja after changing this setting.", "type": "boolean", "default": false, "ignore": ["SettingsProjectScope", "SettingsResourceScope"]}',
+	)
+
+
+def _sidebar_widget_enabled() -> bool:
+	try:
+		return Settings().get_bool(SIDEBAR_WIDGET_SETTING)
+	except Exception as exc:
+		log_warn(f"Theme Ninja could not read sidebar setting: {exc}")
+		return False
 
 
 def _theme_group_for_key(key: str) -> str:
@@ -255,12 +275,9 @@ class ThemePreview(QWidget):
 		left_w = max(260, body.width() - right_w - gap)
 		code_rect = QRectF(body.left(), body.top(), left_w, body.height())
 		right_rect = QRectF(code_rect.right() + gap, body.top(), max(0, body.right() - code_rect.right() - gap), body.height())
-		map_rect = QRectF(right_rect.left(), right_rect.top(), right_rect.width(), max(92, right_rect.height() * 0.58))
-		console_rect = QRectF(right_rect.left(), map_rect.bottom() + gap, right_rect.width(), max(0, right_rect.bottom() - map_rect.bottom() - gap))
+		console_rect = QRectF(right_rect.left(), right_rect.top(), right_rect.width(), right_rect.height())
 
 		self._draw_disassembly(painter, code_rect, base, alt, text, border, selection)
-		if right_rect.width() > 90:
-			self._draw_feature_map(painter, map_rect, base, text, border)
 		if console_rect.width() > 90 and console_rect.height() > 48:
 			self._draw_console(painter, console_rect, base, text, border)
 
@@ -499,20 +516,13 @@ class ThemeNinjaWidget(QWidget):
 		layout.addWidget(self.theme_list, 1)
 
 		row = QHBoxLayout()
-		self.refresh_button = QPushButton("Refresh", panel)
-		self.refresh_button.clicked.connect(lambda: self.refresh_library(call_runtime_refresh=True))
 		self.new_button = QPushButton("New", panel)
 		self.new_button.clicked.connect(self.new_theme)
 		self.duplicate_button = QPushButton("Duplicate", panel)
 		self.duplicate_button.clicked.connect(self.duplicate_current_theme)
-		row.addWidget(self.refresh_button)
 		row.addWidget(self.new_button)
 		row.addWidget(self.duplicate_button)
 		layout.addLayout(row)
-
-		self.apply_button = QPushButton("Apply Selected", panel)
-		self.apply_button.clicked.connect(self.apply_selected_theme)
-		layout.addWidget(self.apply_button)
 
 		self.theme_status = QLabel("", panel)
 		self.theme_status.setObjectName("ThemeNinjaSubtle")
@@ -534,16 +544,10 @@ class ThemeNinjaWidget(QWidget):
 		header.addWidget(self.name_edit, 1)
 		self.save_button = QPushButton("Save", panel)
 		self.save_button.clicked.connect(self.save_current_theme)
-		self.preview_button = QPushButton("Preview in BN", panel)
-		self.preview_button.clicked.connect(self.preview_in_binary_ninja)
-		self.save_apply_button = QPushButton("Save && Apply", panel)
-		self.save_apply_button.clicked.connect(self.save_and_apply_current_theme)
-		self.revert_button = QPushButton("Revert", panel)
-		self.revert_button.clicked.connect(self.revert_current_theme)
+		self.apply_theme_button = QPushButton("Apply Theme", panel)
+		self.apply_theme_button.clicked.connect(self.save_and_apply_current_theme)
 		header.addWidget(self.save_button)
-		header.addWidget(self.preview_button)
-		header.addWidget(self.save_apply_button)
-		header.addWidget(self.revert_button)
+		header.addWidget(self.apply_theme_button)
 		layout.addLayout(header)
 
 		self.path_label = QLabel("No theme selected", panel)
@@ -582,17 +586,11 @@ class ThemeNinjaWidget(QWidget):
 		self.color_filter.textChanged.connect(self.apply_color_filter)
 		tools.addWidget(self.color_filter, 1)
 
-		self.pick_button = QPushButton("Pick Color", wrapper)
-		self.pick_button.clicked.connect(self.pick_selected_color)
-		self.add_alias_button = QPushButton("Add Alias", wrapper)
-		self.add_alias_button.clicked.connect(self.add_color_alias)
-		self.add_theme_color_button = QPushButton("Add Theme Color", wrapper)
-		self.add_theme_color_button.clicked.connect(self.add_theme_color)
+		self.add_button = QPushButton("Add", wrapper)
+		self.add_button.clicked.connect(self.add_color_entry)
 		self.delete_button = QPushButton("Delete", wrapper)
 		self.delete_button.clicked.connect(self.delete_selected_entry)
-		tools.addWidget(self.pick_button)
-		tools.addWidget(self.add_alias_button)
-		tools.addWidget(self.add_theme_color_button)
+		tools.addWidget(self.add_button)
 		tools.addWidget(self.delete_button)
 		layout.addLayout(tools)
 
@@ -618,6 +616,7 @@ class ThemeNinjaWidget(QWidget):
 		self.color_table.setColumnWidth(4, 96)
 		self.color_table.itemChanged.connect(self._table_item_changed)
 		self.color_table.cellDoubleClicked.connect(self._table_cell_double_clicked)
+		self.color_table.itemSelectionChanged.connect(self._update_color_action_state)
 		layout.addWidget(self.color_table, 1)
 		return wrapper
 
@@ -627,17 +626,13 @@ class ThemeNinjaWidget(QWidget):
 		for widget in [
 			self.name_edit,
 			self.save_button,
-			self.preview_button,
-			self.save_apply_button,
-			self.revert_button,
-			self.pick_button,
-			self.add_alias_button,
-			self.add_theme_color_button,
+			self.apply_theme_button,
+			self.add_button,
 			self.delete_button,
 		]:
 			widget.setEnabled(enabled and editable)
 		self.duplicate_button.setEnabled(enabled)
-		self.apply_button.setEnabled(enabled)
+		self._update_color_action_state()
 
 	def _record_id(self, record: ThemeRecord) -> str:
 		if record.path:
@@ -865,17 +860,22 @@ class ThemeNinjaWidget(QWidget):
 	def _update_dirty_state(self) -> None:
 		suffix = " *" if self.dirty else ""
 		self.save_button.setEnabled(self.theme_data is not None and self.dirty and not self.current_read_only)
-		self.preview_button.setEnabled(self.theme_data is not None and not self.current_read_only)
-		self.save_apply_button.setEnabled(self.theme_data is not None and not self.current_read_only)
-		self.revert_button.setEnabled(self.theme_data is not None and not self.current_read_only)
+		self.apply_theme_button.setEnabled(self.theme_data is not None)
+		self.apply_theme_button.setText("Save && Apply" if self.dirty and not self.current_read_only else "Apply Theme")
 		self.name_edit.setEnabled(self.theme_data is not None and not self.current_read_only)
-		for widget in [self.pick_button, self.add_alias_button, self.add_theme_color_button, self.delete_button]:
-			widget.setEnabled(self.theme_data is not None and not self.current_read_only)
+		self._update_color_action_state()
 		if self.current_record and self.theme_data:
 			if self.current_record.read_only:
 				self.path_label.setText("Built-in Binary Ninja theme: read-only. Duplicate it to edit a copy.")
 			else:
 				self.path_label.setText(f"{self.current_record.folder_name}: {self.current_record.path}{suffix}")
+
+	def _update_color_action_state(self) -> None:
+		can_edit = self.theme_data is not None and not self.current_read_only
+		row = self.color_table.currentRow()
+		has_visible_entry = row >= 0 and not self.color_table.isRowHidden(row) and row in self._row_meta
+		self.add_button.setEnabled(can_edit)
+		self.delete_button.setEnabled(can_edit and has_visible_entry)
 
 	def populate_color_table(self, preserve: tuple[str, str] | None = None) -> None:
 		self._updating_table = True
@@ -966,6 +966,7 @@ class ThemeNinjaWidget(QWidget):
 				or (category == "Theme Colors" and section == "theme-colors")
 			)
 			self.color_table.setRowHidden(row, not (matches_text and matches_category))
+		self._update_color_action_state()
 
 	def _selected_entry(self) -> tuple[str, str] | None:
 		row = self.color_table.currentRow()
@@ -994,6 +995,24 @@ class ThemeNinjaWidget(QWidget):
 	def _table_cell_double_clicked(self, row: int, column: int) -> None:
 		if column in (0, 4):
 			self.pick_selected_color()
+
+	def add_color_entry(self) -> None:
+		if self.theme_data is None or self.current_read_only:
+			return
+		choice, ok = QInputDialog.getItem(
+			self,
+			"Add",
+			"Entry type:",
+			["Color Alias", "Theme Color"],
+			0,
+			False,
+		)
+		if not ok:
+			return
+		if choice == "Color Alias":
+			self.add_color_alias()
+		else:
+			self.add_theme_color()
 
 	def pick_selected_color(self) -> None:
 		if self.theme_data is None or self.current_read_only:
@@ -1087,12 +1106,11 @@ class ThemeNinjaWidget(QWidget):
 		return True
 
 	def save_and_apply_current_theme(self) -> None:
-		if self.current_read_only:
-			self.apply_selected_theme()
+		if self.theme_data is None or self.current_record is None:
 			return
-		if not self.save_current_theme() or not self.theme_data:
+		if not self.current_read_only and self.dirty and not self.save_current_theme():
 			return
-		name = str(self.theme_data.get("name", ""))
+		name = str(self.theme_data.get("name", self.current_record.name))
 		try:
 			_refresh_runtime_themes()
 			_set_active_theme(name, True)
@@ -1100,7 +1118,7 @@ class ThemeNinjaWidget(QWidget):
 			self.populate_theme_list()
 			self.theme_status.setText(f"Active: {self.active_name or name}")
 		except Exception as exc:
-			QMessageBox.critical(self, "Theme Ninja", f"Saved, but Binary Ninja could not apply the theme:\n{exc}")
+			QMessageBox.critical(self, "Theme Ninja", f"Binary Ninja could not apply the theme:\n{exc}")
 
 	def preview_in_binary_ninja(self) -> None:
 		if self.theme_data is None or self.user_dir is None or self.current_read_only:
@@ -1237,7 +1255,9 @@ def register_plugin() -> None:
 	global _registered
 	if _registered:
 		return
-	Sidebar.addSidebarWidgetType(ThemeNinjaWidgetType())
+	_register_settings()
+	if _sidebar_widget_enabled():
+		Sidebar.addSidebarWidgetType(ThemeNinjaWidgetType())
 	UIAction.registerAction("Theme Ninja")
 	UIActionHandler.globalActions().bindAction(
 		"Theme Ninja", UIAction(ThemeNinjaWidget.create_pane, ThemeNinjaWidget.can_create_pane)
